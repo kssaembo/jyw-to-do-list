@@ -1,15 +1,13 @@
-
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Supabase 클라이언트 초기화 - 새로운 프로젝트 정보로 교체해주세요.
-const supabaseUrl = 'https://mqolkfxzxgmuwtrlxfpr.supabase.co'; // 여기에 Supabase Project URL을 입력하세요.
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xb2xrZnh6eGdtdXd0cmx4ZnByIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY4MjQ2ODEsImV4cCI6MjA3MjQwMDY4MX0.D140Ssf5pgox40AN5UZfr4MXnFv-g46roXdtImySV7g'; // 여기에 Supabase Anon Key를 입력하세요.
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Supabase 클라이언트는 자격 증명 확인 후 나중에 초기화됩니다.
+let supabase: SupabaseClient;
+// 'app' 변수는 startApp 함수 내에서 DOM이 로드된 후 초기화됩니다.
+let app: HTMLDivElement;
 
 
 type User = 'jeongwoo' | 'yeonwoo';
@@ -24,7 +22,7 @@ interface CheckItem {
 interface Submission {
     id: number;
     user: User;
-    date: string; // ISO String from Supabase timestamptz
+    date: string; // ISO String from Supabase timestamz
     completedTasks: string[];
     allCompleted: boolean;
     rewarded: boolean;
@@ -49,9 +47,8 @@ interface AppState {
     isPointModalOpen: boolean;
     pointModalMode: 'add' | 'subtract' | null;
     pointModalUser: User | null;
+    isNavCollapsed: boolean;
 }
-
-const app = document.getElementById('app') as HTMLDivElement;
 
 let state: AppState = getInitialState();
 
@@ -74,6 +71,7 @@ function getInitialState(): AppState {
         isPointModalOpen: false,
         pointModalMode: null,
         pointModalUser: null,
+        isNavCollapsed: window.innerWidth < 768, // 모바일 화면에서는 기본적으로 접힘
     };
 }
 
@@ -140,6 +138,10 @@ async function syncDataFromSupabase() {
 
 function render() {
     if (!app) return;
+
+    // 네비게이션 상태에 따라 루트 요소에 클래스를 추가합니다.
+    app.className = state.isNavCollapsed ? 'nav-collapsed' : '';
+    
     const { activeTab, isAdminAuthenticated } = state;
 
     const mainElement = app.querySelector('main');
@@ -162,19 +164,35 @@ function render() {
             <nav>
                 <button class="tab ${activeTab === 'jeongwoo' ? 'active' : ''}" data-tab="jeongwoo">
                     <span class="material-symbols-outlined">smart_toy</span>
-                    정우의 할 일
+                    <span class="tab-text">정우의 할 일</span>
                 </button>
                 <button class="tab ${activeTab === 'yeonwoo' ? 'active' : ''}" data-tab="yeonwoo">
                     <span class="material-symbols-outlined">rocket_launch</span>
-                    연우의 할 일
+                    <span class="tab-text">연우의 할 일</span>
                 </button>
                 <button class="tab ${activeTab === 'admin' ? 'active' : ''}" data-tab="admin">
                     <span class="material-symbols-outlined">admin_panel_settings</span>
-                    관리자
+                    <span class="tab-text">관리자</span>
                 </button>
             </nav>
         </header>
         <div class="content-wrapper">
+            <button id="nav-toggle" aria-label="네비게이션 토글" title="네비게이션 토글">
+                <span class="material-symbols-outlined">
+                    ${state.isNavCollapsed ? 'chevron_right' : 'chevron_left'}
+                </span>
+            </button>
+            <div id="quick-nav" aria-label="빠른 탐색">
+                <button class="mobile-tab-shortcut ${state.activeTab === 'jeongwoo' ? 'active' : ''}" data-tab="jeongwoo" aria-label="정우의 할 일" title="정우의 할 일">
+                    <span class="material-symbols-outlined">smart_toy</span>
+                </button>
+                <button class="mobile-tab-shortcut ${state.activeTab === 'yeonwoo' ? 'active' : ''}" data-tab="yeonwoo" aria-label="연우의 할 일" title="연우의 할 일">
+                    <span class="material-symbols-outlined">rocket_launch</span>
+                </button>
+                <button class="mobile-tab-shortcut ${state.activeTab === 'admin' ? 'active' : ''}" data-tab="admin" aria-label="관리자" title="관리자">
+                    <span class="material-symbols-outlined">admin_panel_settings</span>
+                </button>
+            </div>
             ${content}
         </div>
         <div class="fireworks-container"></div>
@@ -193,6 +211,47 @@ function render() {
          if (areAllTasksCompleted(activeTab)) {
             triggerFireworks();
          }
+    }
+}
+
+function renderConfigurationScreen(): string {
+    return `
+        <div class="content-wrapper">
+            <main class="setup-modal">
+                <h1>앱 설정</h1>
+                <p>미리보기 환경에서 Supabase에 연결하려면 URL과 익명 키(anon key)를 입력해주세요.</p>
+                <form id="config-form">
+                    <input type="text" id="supabase-url-input" required placeholder="Supabase URL" />
+                    <input type="password" id="supabase-key-input" required placeholder="Supabase Anon Key" />
+                    <button type="submit">연결</button>
+                </form>
+                <p class="setup-note">이 정보는 브라우저 세션에만 저장되며 코드에 남지 않습니다.</p>
+            </main>
+        </div>
+    `;
+}
+
+function addConfigurationEventListeners() {
+    const configForm = document.getElementById('config-form');
+    if (configForm) {
+        configForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const urlInput = document.getElementById('supabase-url-input') as HTMLInputElement;
+            const keyInput = document.getElementById('supabase-key-input') as HTMLInputElement;
+            
+            const supabaseUrl = urlInput.value.trim();
+            const supabaseKey = keyInput.value.trim();
+
+            if (supabaseUrl && supabaseKey) {
+                sessionStorage.setItem('supabaseUrl', supabaseUrl);
+                sessionStorage.setItem('supabaseKey', supabaseKey);
+                // Supabase를 초기화하고 메인 앱 로직을 시작합니다.
+                supabase = createClient(supabaseUrl, supabaseKey);
+                initializeApp();
+            } else {
+                alert("URL과 Key를 모두 입력해야 합니다.");
+            }
+        });
     }
 }
 
@@ -346,7 +405,7 @@ function renderAdminView(): string {
                 <div class="admin-card">
                     <div class="admin-section">
                          <div class="admin-section-header">
-                            <h2>정우 체크리스트 관리</h2>
+                            <h2>정우의 할 일</h2>
                             <div class="points-display admin">
                                 <button class="point-adjust-btn add" data-user="jeongwoo" aria-label="점수 더하기">
                                     <span class="material-symbols-outlined">add</span>
@@ -367,7 +426,7 @@ function renderAdminView(): string {
                 <div class="admin-card">
                     <div class="admin-section">
                         <div class="admin-section-header">
-                            <h2>연우 체크리스트 관리</h2>
+                            <h2>연우의 할 일</h2>
                             <div class="points-display admin">
                                 <button class="point-adjust-btn add" data-user="yeonwoo" aria-label="점수 더하기">
                                     <span class="material-symbols-outlined">add</span>
@@ -557,25 +616,46 @@ function addEventListeners() {
             const editor = document.getElementById(`${user}-editor`) as HTMLTextAreaElement;
             const newTasks = editor.value.split('\n').map(text => text.trim()).filter(text => text.length > 0);
             
-            const { error: deleteError } = await supabase.from('checklists').delete().eq('user_name', user);
-            if(deleteError) {
-                alert(`기존 목록 삭제에 실패했습니다: ${deleteError.message}`);
-                return;
-            }
+            const saveButton = e.currentTarget as HTMLButtonElement;
+            saveButton.disabled = true;
+            saveButton.textContent = '저장 중...';
 
-            const tasksToInsert = newTasks.map((text, index) => ({ user_name: user, task_text: text, task_order: index + 1, completed: false }));
-            const { error: insertError } = await supabase.from('checklists').insert(tasksToInsert);
-            
-            if (insertError) {
-                alert(`새 목록 저장에 실패했습니다: ${insertError.message}`);
-            } else {
+            try {
+                const { error: deleteError } = await supabase.from('checklists').delete().eq('user_name', user);
+                if (deleteError) {
+                    throw deleteError;
+                }
+
+                if (newTasks.length > 0) {
+                    // FIX: The 'checklists' table is for task templates and does not have a 'completed' column.
+                    // Removing this field from the insert payload resolves the database error.
+                    const tasksToInsert = newTasks.map((text, index) => ({
+                        user_name: user,
+                        task_text: text,
+                        task_order: index + 1,
+                    }));
+                    const { error: insertError } = await supabase.from('checklists').insert(tasksToInsert);
+                    if (insertError) {
+                        throw insertError;
+                    }
+                }
+
+                // Success case
                 state.adminSaveMessage = '저장이 완료되었습니다.';
-                await syncDataFromSupabase(); // Refetch data to update the view correctly
+                await syncDataFromSupabase();
                 render();
                 setTimeout(() => {
                     state.adminSaveMessage = null;
                     render();
                 }, 3000);
+
+            } catch (error: any) {
+                // Error case
+                console.error(`Error saving checklist for ${user}:`, error);
+                alert(`저장에 실패했습니다: ${error.message}`);
+                // Re-enable the button on failure
+                saveButton.disabled = false;
+                saveButton.textContent = '저장';
             }
         });
     });
@@ -654,6 +734,24 @@ function addEventListeners() {
             const date = (e.currentTarget as HTMLElement).dataset.date;
             if (date) {
                 state.selectedDate = state.selectedDate === date ? null : date;
+                render();
+            }
+        });
+    });
+
+    const navToggle = document.getElementById('nav-toggle');
+    if (navToggle) {
+        navToggle.addEventListener('click', () => {
+            state.isNavCollapsed = !state.isNavCollapsed;
+            render();
+        });
+    }
+
+    app.querySelectorAll('.mobile-tab-shortcut').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const targetTab = (e.currentTarget as HTMLElement).dataset.tab as Tab;
+            if (targetTab) {
+                state.activeTab = targetTab;
                 render();
             }
         });
@@ -742,7 +840,7 @@ async function handleAdminReset(submissionId: number) {
             }
 
             const currentPoints = Number(currentRewardData?.total_points) || 0;
-            const newPoints = Math.max(0, currentPoints - reward_points); // Ensure points don't go below zero.
+            const newPoints = currentPoints - reward_points; // Allow negative points
 
             const { error: updateError } = await supabase
                 .from('rewards')
@@ -953,12 +1051,46 @@ function setupRealtimeSubscriptions() {
 }
 
 async function initializeApp() {
-    app.innerHTML = `<div style="display:flex;justify-content:center;align-items:center;height:100%;"><h1 style="font-size: 1.5rem; color: #6c757d;">데이터를 불러오는 중입니다...</h1></div>`;
+    app.innerHTML = `<div class="content-wrapper"><main style="display:flex;justify-content:center;align-items:center;height:100%;"><h1 style="font-size: 1.5rem; color: #6c757d;">데이터를 불러오는 중입니다...</h1></main></div>`;
     await syncDataFromSupabase();
     render();
     setupRealtimeSubscriptions();
 }
 
-// FIX: Removed the unnecessary check for placeholder Supabase credentials.
-// The credentials have been provided, so the app can initialize directly.
-initializeApp();
+// Service Worker Registration
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').then(registration => {
+      console.log('ServiceWorker registration successful with scope: ', registration.scope);
+    }, err => {
+      console.log('ServiceWorker registration failed: ', err);
+    });
+  });
+}
+
+// 앱 시작을 위한 메인 진입점
+function startApp() {
+    // DOM이 로드된 후에 #app 요소를 안전하게 찾습니다.
+    app = document.getElementById('app') as HTMLDivElement;
+    if (!app) {
+        console.error('Fatal: #app element not found in the DOM.');
+        return;
+    }
+
+    const supabaseUrl = (import.meta as any)?.env?.VITE_SUPABASE_URL || sessionStorage.getItem('supabaseUrl');
+    const supabaseKey = (import.meta as any)?.env?.VITE_SUPABASE_KEY || sessionStorage.getItem('supabaseKey');
+
+    if (supabaseUrl && supabaseKey) {
+        // 자격 증명이 있으면 앱을 바로 초기화합니다.
+        supabase = createClient(supabaseUrl, supabaseKey);
+        initializeApp();
+    } else {
+        // 자격 증명이 없으면, 설정 화면을 직접 렌더링합니다.
+        // 이렇게 하면 메인 render() 함수와 책임이 분리되어 코드가 더 명확해집니다.
+        app.innerHTML = renderConfigurationScreen();
+        addConfigurationEventListeners();
+    }
+}
+
+// DOM이 완전히 로드된 후에 앱을 시작하여, 스크립트가 #app 요소를 찾지 못하는 문제를 방지합니다.
+window.addEventListener('DOMContentLoaded', startApp);

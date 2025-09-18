@@ -1,9 +1,17 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>오늘의 미션! 체크리스트</title>
+
+    <!-- PWA Manifest Link -->
+    <link rel="manifest" href="/manifest.webmanifest">
+    
+    <!-- Theme Color for browsers -->
+    <meta name="theme-color" content="#6a5acd">
+
     <link rel="stylesheet" href="index.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,7 +20,7 @@
 <script type="importmap">
 {
   "imports": {
-    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.56.0"
+    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.57.4"
   }
 }
 </script>
@@ -20,7 +28,6 @@
 </head>
 <body>
     <div id="app"></div>
-    <script type="module" src="index.tsx"></script>
-<script type="module" src="/index.tsx"></script>
+    <script type="module" src="/index.tsx"></script>
 </body>
 </html>
