@@ -1077,6 +1077,12 @@ function startApp() {
         return;
     }
 
+    // 디버깅: Vercel 환경 변수가 제대로 주입되었는지 확인합니다.
+    console.log("Vercel 환경 변수 확인:");
+    console.log("VITE_SUPABASE_URL:", (import.meta as any)?.env?.VITE_SUPABASE_URL);
+    console.log("VITE_SUPABASE_KEY:", (import.meta as any)?.env?.VITE_SUPABASE_KEY ? "설정됨 (보안을 위해 값은 출력하지 않음)" : "설정되지 않음");
+
+
     const supabaseUrl = (import.meta as any)?.env?.VITE_SUPABASE_URL || sessionStorage.getItem('supabaseUrl');
     const supabaseKey = (import.meta as any)?.env?.VITE_SUPABASE_KEY || sessionStorage.getItem('supabaseKey');
 
