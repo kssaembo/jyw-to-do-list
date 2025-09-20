@@ -1058,6 +1058,7 @@ async function initializeApp() {
 }
 
 // Service Worker Registration
+/*
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js').then(registration => {
@@ -1067,6 +1068,7 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+*/
 
 // 앱 시작을 위한 메인 진입점
 function startApp() {
