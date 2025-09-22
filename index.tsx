@@ -9,7 +9,6 @@ let supabase: SupabaseClient;
 // 'app' 변수는 startApp 함수 내에서 DOM이 로드된 후 초기화됩니다.
 let app: HTMLDivElement;
 
-
 type User = 'jeongwoo' | 'yeonwoo';
 type Tab = User | 'admin';
 
@@ -215,10 +214,6 @@ function render() {
 }
 
 function renderConfigurationScreen(): string {
-    // For debugging Vercel environment variable injection
-    const debugUrl = (import.meta as any)?.env?.VITE_SUPABASE_URL;
-    const debugKeyIsSet = !!(import.meta as any)?.env?.VITE_SUPABASE_KEY;
-
     return `
         <div class="content-wrapper">
             <main class="setup-modal">
@@ -230,12 +225,6 @@ function renderConfigurationScreen(): string {
                     <button type="submit">연결</button>
                 </form>
                 <p class="setup-note">이 정보는 브라우저 세션에만 저장되며 코드에 남지 않습니다.</p>
-                
-                <div class="debug-panel">
-                    <h3>Vercel 환경 변수 디버그:</h3>
-                    <p>URL: <code>${debugUrl || '설정되지 않음'}</code></p>
-                    <p>Key: <code>${debugKeyIsSet ? '설정됨' : '설정되지 않음'}</code></p>
-                </div>
             </main>
         </div>
     `;
@@ -1087,24 +1076,33 @@ function startApp() {
         return;
     }
 
-    // 디버깅: Vercel 환경 변수가 제대로 주입되었는지 확인합니다.
-    console.log("Vercel 환경 변수 확인:");
-    console.log("VITE_SUPABASE_URL:", (import.meta as any)?.env?.VITE_SUPABASE_URL);
-    console.log("VITE_SUPABASE_KEY:", (import.meta as any)?.env?.VITE_SUPABASE_KEY ? "설정됨 (보안을 위해 값은 출력하지 않음)" : "설정되지 않음");
+    // Vercel Build Command가 이 자리 표시자들을 실제 값으로 교체합니다.
+    const supabaseUrl = "__VERCEL_INJECTED_SUPABASE_URL__";
+    const supabaseKey = "__VERCEL_INJECTED_SUPABASE_KEY__";
 
+    console.log("빌드 후 주입된 변수 확인:");
+    console.log("VITE_SUPABASE_URL:", supabaseUrl.startsWith('https://') ? supabaseUrl : '주입 실패');
+    console.log("VITE_SUPABASE_KEY:", supabaseKey.includes('__') ? '주입 실패' : '주입됨');
 
-    const supabaseUrl = (import.meta as any)?.env?.VITE_SUPABASE_URL || sessionStorage.getItem('supabaseUrl');
-    const supabaseKey = (import.meta as any)?.env?.VITE_SUPABASE_KEY || sessionStorage.getItem('supabaseKey');
+    // Vercel 빌드에 의해 자리 표시자가 실제 값으로 교체되었는지 확인합니다.
+    const areVercelVarsInjected = supabaseUrl.startsWith('https://') && !supabaseKey.includes('__');
 
-    if (supabaseUrl && supabaseKey) {
+    if (areVercelVarsInjected) {
         // 자격 증명이 있으면 앱을 바로 초기화합니다.
         supabase = createClient(supabaseUrl, supabaseKey);
         initializeApp();
     } else {
-        // 자격 증명이 없으면, 설정 화면을 직접 렌더링합니다.
-        // 이렇게 하면 메인 render() 함수와 책임이 분리되어 코드가 더 명확해집니다.
-        app.innerHTML = renderConfigurationScreen();
-        addConfigurationEventListeners();
+        // 수동 입력을 위한 대체 경로
+        const manualUrl = sessionStorage.getItem('supabaseUrl');
+        const manualKey = sessionStorage.getItem('supabaseKey');
+        if (manualUrl && manualKey) {
+            supabase = createClient(manualUrl, manualKey);
+            initializeApp();
+        } else {
+            // 자격 증명이 없으면, 설정 화면을 직접 렌더링합니다.
+            app.innerHTML = renderConfigurationScreen();
+            addConfigurationEventListeners();
+        }
     }
 }
 
