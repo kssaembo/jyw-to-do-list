@@ -215,6 +215,10 @@ function render() {
 }
 
 function renderConfigurationScreen(): string {
+    // For debugging Vercel environment variable injection
+    const debugUrl = (import.meta as any)?.env?.VITE_SUPABASE_URL;
+    const debugKeyIsSet = !!(import.meta as any)?.env?.VITE_SUPABASE_KEY;
+
     return `
         <div class="content-wrapper">
             <main class="setup-modal">
@@ -226,6 +230,12 @@ function renderConfigurationScreen(): string {
                     <button type="submit">연결</button>
                 </form>
                 <p class="setup-note">이 정보는 브라우저 세션에만 저장되며 코드에 남지 않습니다.</p>
+                
+                <div class="debug-panel">
+                    <h3>Vercel 환경 변수 디버그:</h3>
+                    <p>URL: <code>${debugUrl || '설정되지 않음'}</code></p>
+                    <p>Key: <code>${debugKeyIsSet ? '설정됨' : '설정되지 않음'}</code></p>
+                </div>
             </main>
         </div>
     `;
