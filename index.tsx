@@ -74,6 +74,35 @@ function getInitialState(): AppState {
     };
 }
 
+/**
+ * Supabase에서 오늘의 제출 기록을 기반으로 사용자의 체크리스트 '완료' 상태를 동기화합니다.
+ * 이 함수는 초기 로드 시 및 데이터가 변경될 때 호출되어야 합니다.
+ */
+function syncAllChecklistStatesFromSubmissions() {
+    const today = getLocalDateString(new Date());
+    (['jeongwoo', 'yeonwoo'] as User[]).forEach((user) => {
+        const submissionToday = state.submissions.find(s => 
+            s.user === user && getLocalDateString(new Date(s.date)) === today
+        );
+        
+        const taskList = state[user];
+        if (taskList && taskList.length > 0) {
+             if (submissionToday) {
+                // 제출 기록이 있으면, 그것을 기준으로 '완료' 상태를 설정합니다.
+                taskList.forEach(item => {
+                    item.completed = submissionToday.completedTasks.includes(item.text);
+                });
+            } else {
+                // 제출 기록이 없으면, 모든 항목을 '미완료'로 설정합니다.
+                taskList.forEach(item => {
+                    item.completed = false;
+                });
+            }
+        }
+    });
+}
+
+
 async function syncDataFromSupabase() {
     console.log('Fetching data from Supabase...');
     try {
@@ -295,23 +324,9 @@ function getLocalDateString(date: Date): string {
 function renderChecklistView(user: User): string {
     const list = state[user];
     const title = user === 'jeongwoo' ? "정우의 오늘 할 일!" : "연우의 오늘 할 일!";
-    const today = getLocalDateString(new Date());
-    const submissionToday = state.submissions.find(s => {
-        if (s.user !== user) return false;
-        const submissionDate = new Date(s.date);
-        return getLocalDateString(submissionDate) === today;
-    });
-    const hasSubmittedToday = !!submissionToday;
 
-    const itemsToShow = hasSubmittedToday 
-        ? list.map(item => ({
-            ...item,
-            completed: submissionToday.completedTasks.includes(item.text)
-        }))
-        : list;
-
-    const completedCount = itemsToShow.filter(item => item.completed).length;
-    const totalCount = itemsToShow.length;
+    const completedCount = list.filter(item => item.completed).length;
+    const totalCount = list.length;
     const percentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
     const points = user === 'jeongwoo' ? state.jeongwooPoints : state.yeonwooPoints;
@@ -335,8 +350,8 @@ function renderChecklistView(user: User): string {
                 </div>
             </div>
             <div class="checklist">
-                ${itemsToShow.map(item => `
-                    <div class="check-item ${item.completed ? 'completed' : ''} ${hasSubmittedToday ? 'disabled' : ''}" data-user="${user}" data-id="${item.id}">
+                ${list.map(item => `
+                    <div class="check-item ${item.completed ? 'completed' : ''}" data-user="${user}" data-id="${item.id}">
                         <span class="check-item-text">${item.text}</span>
                         <span class="completed-badge">완료!</span>
                     </div>
@@ -344,9 +359,9 @@ function renderChecklistView(user: User): string {
             </div>
         </main>
         <footer>
-            ${areAllTasksCompleted(user) && !hasSubmittedToday ? `<div class="completion-message">모든 미션을 완료했어요! 정말 대단해요!</div>` : ''}
-            <button class="submit-btn" data-user="${user}" ${hasSubmittedToday ? 'disabled' : ''}>
-                ${hasSubmittedToday ? '제출 완료' : '오늘의 미션 완료!'}
+            ${areAllTasksCompleted(user) ? `<div class="completion-message">모든 미션을 완료했어요! 정말 대단해요!</div>` : ''}
+            <button class="submit-btn" data-user="${user}">
+                저장하기
             </button>
         </footer>
     `;
@@ -450,12 +465,22 @@ function renderAdminView(): string {
                         ${state.selectedDate ? `<h3>${getFormattedDate(state.selectedDate)} 기록</h3>` : '<h3>날짜를 선택하여 기록을 확인하세요.</h3>'}
                         ${submissionsOnSelectedDate.length > 0 ? `
                             <ul class="submissions-list">
-                                ${submissionsOnSelectedDate.map(s => `
+                                ${submissionsOnSelectedDate.map(s => {
+                                    const allTaskTexts = state[s.user].map(item => item.text);
+                                    const uncompletedTasks = allTaskTexts.filter(text => !s.completedTasks.includes(text));
+
+                                    return `
                                     <li class="submission-item">
-                                        <div>
+                                        <div class="submission-info">
                                             <strong>${s.user === 'jeongwoo' ? '정우' : '연우'}</strong> 님 제출 
                                             <small>(${new Date(s.date).toLocaleTimeString('ko-KR')})</small>
                                             <br>완료 항목: ${s.completedTasks.length > 0 ? s.completedTasks.join(', ') : '없음'}
+                                            ${uncompletedTasks.length > 0 ? `
+                                                <div class="uncompleted-tasks">
+                                                    <strong>미완료 항목:</strong>
+                                                    <span>${uncompletedTasks.join(', ')}</span>
+                                                </div>
+                                            ` : ''}
                                         </div>
                                         <div class="submission-controls">
                                             ${s.rewarded 
@@ -468,7 +493,7 @@ function renderAdminView(): string {
                                             <button class="admin-reset-btn" data-submission-id="${s.id}">삭제</button>
                                         </div>
                                     </li>
-                                `).join('')}
+                                `}).join('')}
                             </ul>` 
                         : (state.selectedDate ? '<p>해당 날짜에 제출된 기록이 없습니다.</p>' : '')}
                     </div>
@@ -570,6 +595,8 @@ function addEventListeners() {
             const targetTab = (e.currentTarget as HTMLElement).dataset.tab as Tab;
             if (targetTab) {
                 state.activeTab = targetTab;
+                // 사용자가 탭을 전환할 때마다 해당 사용자의 체크리스트 상태를 다시 동기화합니다.
+                syncAllChecklistStatesFromSubmissions();
                 render();
             }
         });
@@ -592,7 +619,7 @@ function addEventListeners() {
         });
     }
 
-    app.querySelectorAll('.check-item:not(.disabled)').forEach(item => {
+    app.querySelectorAll('.check-item').forEach(item => {
         item.addEventListener('click', (e) => {
             const { user, id } = (e.currentTarget as HTMLElement).dataset;
             if (user && id) {
@@ -751,6 +778,8 @@ function addEventListeners() {
             const targetTab = (e.currentTarget as HTMLElement).dataset.tab as Tab;
             if (targetTab) {
                 state.activeTab = targetTab;
+                 // 사용자가 탭을 전환할 때마다 해당 사용자의 체크리스트 상태를 다시 동기화합니다.
+                syncAllChecklistStatesFromSubmissions();
                 render();
             }
         });
@@ -774,29 +803,70 @@ async function handleSubmit(user: User) {
     if (!submitBtn || submitBtn.disabled) return;
 
     submitBtn.disabled = true;
-    submitBtn.textContent = '제출 중...';
+    submitBtn.textContent = '저장 중...';
 
     const allCompleted = areAllTasksCompleted(user);
     const completedTasks = state[user].filter(item => item.completed).map(item => item.text);
 
-    try {
-        const { error } = await supabase
-            .from('submissions')
-            .insert({
-                user_name: user,
-                submission_date: new Date().toISOString(),
-                completed_tasks: completedTasks,
-                all_completed: allCompleted,
-                rewarded: false,
-                reward_points: 0,
-            });
+    const today = getLocalDateString(new Date());
+    const submissionToday = state.submissions.find(s => 
+        s.user === user && getLocalDateString(new Date(s.date)) === today
+    );
 
-        if (error) {
-            throw error;
+    try {
+        if (submissionToday) {
+            // 기존 제출 기록 업데이트
+            const { data, error } = await supabase
+                .from('submissions')
+                .update({ 
+                    completed_tasks: completedTasks,
+                    all_completed: allCompleted 
+                })
+                .eq('id', submissionToday.id)
+                .select()
+                .single();
+
+            if (error) throw error;
+            
+            // 로컬 상태를 수동으로 업데이트
+            const index = state.submissions.findIndex(s => s.id === submissionToday.id);
+            if (index > -1) {
+                state.submissions[index] = { ...state.submissions[index],
+                    completedTasks: data.completed_tasks,
+                    allCompleted: data.all_completed,
+                };
+            }
+        } else {
+            // 새 제출 기록 삽입
+            const { data, error } = await supabase
+                .from('submissions')
+                .insert({
+                    user_name: user,
+                    submission_date: new Date().toISOString(),
+                    completed_tasks: completedTasks,
+                    all_completed: allCompleted,
+                    rewarded: false,
+                    reward_points: 0,
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            // 로컬 상태 배열의 시작 부분에 새 제출 기록 추가
+            state.submissions.unshift({
+                id: data.id,
+                user: data.user_name,
+                date: data.submission_date,
+                completedTasks: data.completed_tasks,
+                allCompleted: data.all_completed,
+                rewarded: data.rewarded,
+                reward_points: data.reward_points || 0,
+            });
         }
         
-        state.submissionMessage = '제출이 완료되었습니다.';
-        await syncDataFromSupabase(); 
+        state.submissionMessage = '저장이 완료되었습니다.';
+        // 전체 동기화 없이 렌더링만 다시 호출하여 UI 상태를 보존합니다.
         render();
         
         setTimeout(() => {
@@ -805,12 +875,13 @@ async function handleSubmit(user: User) {
         }, 3000);
 
     } catch (err: any) {
-        console.error('제출 오류:', err);
-        alert(`제출에 실패했습니다: ${err.message}`);
-        
+        console.error('저장 오류:', err);
+        alert(`저장에 실패했습니다: ${err.message}`);
+    } finally {
+        // 성공하든 실패하든 버튼을 다시 활성화합니다.
         if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.textContent = '오늘의 미션 완료!';
+            submitBtn.textContent = '저장하기';
         }
     }
 }
@@ -1033,9 +1104,10 @@ function setupRealtimeSubscriptions() {
             { event: '*', schema: 'public' }, // Listen to all tables
             async (payload) => {
                 console.log('Database change received!', payload);
-                // To prevent race conditions with manual updates, we refetch data
-                // after every manual action. The real-time is a good fallback.
+                // 데이터베이스 변경 시, 데이터를 다시 동기화하고,
+                // 제출 기록을 기반으로 체크리스트 상태를 업데이트합니다.
                 await syncDataFromSupabase();
+                syncAllChecklistStatesFromSubmissions();
                 render();
             }
         )
@@ -1052,6 +1124,8 @@ function setupRealtimeSubscriptions() {
 async function initializeApp() {
     app.innerHTML = `<div class="content-wrapper"><main style="display:flex;justify-content:center;align-items:center;height:100%;"><h1 style="font-size: 1.5rem; color: #6c757d;">데이터를 불러오는 중입니다...</h1></main></div>`;
     await syncDataFromSupabase();
+    // 초기 로드 시 오늘의 진행 상황을 불러옵니다.
+    syncAllChecklistStatesFromSubmissions();
     render();
     setupRealtimeSubscriptions();
 }
