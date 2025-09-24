@@ -329,6 +329,13 @@ function renderChecklistView(user: User): string {
     const totalCount = list.length;
     const percentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
+    const rewardMilestones = [
+        { percent: 30, angle: 108 },  // 360 * 0.3
+        { percent: 55, angle: 198 },  // 360 * 0.55
+        { percent: 80, angle: 288 },  // 360 * 0.8
+        { percent: 100, angle: 360 } // 360 * 1
+    ];
+
     const points = user === 'jeongwoo' ? state.jeongwooPoints : state.yeonwooPoints;
 
     return `
@@ -347,6 +354,17 @@ function renderChecklistView(user: User): string {
              <div class="progress-container">
                 <div class="progress-circle" style="--progress: ${percentage}">
                     <span class="progress-text">${Math.round(percentage)}%</span>
+                </div>
+                <div class="reward-markers">
+                    ${rewardMilestones.map(milestone => `
+                        <div 
+                            class="reward-marker ${percentage >= milestone.percent ? 'earned' : ''}" 
+                            style="--angle: ${milestone.angle}deg;"
+                            title="보상 ${milestone.percent}%"
+                        >
+                            <span class="material-symbols-outlined">favorite</span>
+                        </div>
+                    `).join('')}
                 </div>
             </div>
             <div class="checklist">

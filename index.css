@@ -191,6 +191,11 @@ h1 {
     justify-content: center;
     align-items: center;
     margin-bottom: 2.5rem;
+    position: relative;
+    width: 200px;
+    height: 200px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .progress-circle {
@@ -201,6 +206,7 @@ h1 {
     place-items: center;
     background: conic-gradient(var(--completed-color) calc(var(--progress) * 1%), var(--border-color) 0);
     transition: background 0.5s ease;
+    position: relative; /* Fixes scrolling issue with pseudo-element */
 }
 
 .progress-circle::before {
@@ -1029,6 +1035,77 @@ main.admin-main {
     font-size: 24px;
 }
 
+/* Reward Markers */
+.reward-markers {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 150px;
+    height: 150px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+.reward-marker {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    height: 50%;
+    width: 2px;
+    margin-left: -1px;
+    transform-origin: bottom center;
+    transform: rotate(var(--angle));
+}
+
+.reward-marker::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: 8px;
+    background-color: var(--border-color);
+    transition: background-color 0.3s ease;
+}
+
+.reward-marker .material-symbols-outlined {
+    position: absolute;
+    top: -24px;
+    left: 50%;
+    transform: translateX(-50%) rotate(calc(-1 * var(--angle)));
+    font-size: 20px;
+    color: #e9c46a; /* Gold for unearned */
+    transition: all 0.3s ease;
+}
+
+.reward-marker.earned::before {
+    background-color: var(--completed-color);
+}
+
+.reward-marker.earned .material-symbols-outlined {
+    color: #e76f51; /* Vibrant orange/red for earned */
+    animation: pulse-and-sway 2s infinite ease-in-out;
+}
+
+@keyframes pulse-and-sway {
+    0% {
+        transform: translateX(-50%) rotate(calc(-1 * var(--angle))) scale(1);
+    }
+    25% {
+        transform: translateX(-50%) rotate(calc(-1 * var(--angle) - 5deg)) scale(1.2);
+    }
+    50% {
+        transform: translateX(-50%) rotate(calc(-1 * var(--angle))) scale(1);
+    }
+    75% {
+        transform: translateX(-50%) rotate(calc(-1 * var(--angle) + 5deg)) scale(1.2);
+    }
+    100% {
+        transform: translateX(-50%) rotate(calc(-1 * var(--angle))) scale(1);
+    }
+}
+
 
 /* Responsive Design for Mobile */
 @media (max-width: 768px) {
@@ -1054,6 +1131,11 @@ main.admin-main {
         font-size: 1.8rem;
         margin-bottom: 1.5rem;
     }
+    
+    .progress-container {
+        width: 160px;
+        height: 160px;
+    }
 
     .progress-circle {
         width: 120px;
@@ -1065,6 +1147,16 @@ main.admin-main {
     }
     .progress-text {
         font-size: 1.8rem;
+    }
+    
+    .reward-markers {
+        width: 120px;
+        height: 120px;
+    }
+    
+    .reward-marker .material-symbols-outlined {
+        top: -20px;
+        font-size: 18px;
     }
 
     .check-item {
